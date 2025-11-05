@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processador de Mapas - Hemocentro da Paraíba</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- Variáveis de Tema --- */
+        :root {
+            /* Paleta Light (Padrão) */
+            --color-bg: #e8eaed;
+            --color-card-bg: #ffffff;
+            --color-text-primary: #2c3e50;
+            --color-text-secondary: #555;
+            --color-shadow: rgba(0, 0, 0, 0.1);
+            --color-accent: #e74c3c;
+            --color-accent-dark: #c0392b;
+            --color-accent-bg-light: #fcf1f0;
+            --color-accent-border: #e74c3c;
+            --status-success-bg: #d4edda;
+            --status-success-border: #c3e6cb;
+            --status-success-text: #155724;
+            --status-error-bg: #f8d7da;
+            --status-error-border: #f5c6cb;
+            --status-error-text: #721c24;
+            --status-warning-bg: #fff3cd;
+            --status-warning-border: #ffeeba;
+            --status-warning-text: #856404;
+            --toggle-icon-color: #f39c12; 
+        }
+
+        body.dark-mode {
+            /* Paleta Dark */
+            --color-bg: #202124;
+            --color-card-bg: #303134;
+            --color-text-primary: #e8eaed;
+            --color-text-secondary: #bdc1c6;
+            --color-shadow: rgba(0, 0, 0, 0.4);
+            --color-accent: #e74c3c;
+            --color-accent-dark: #c0392b;
+            --color-accent-bg-light: #4a3837;
+            --color-accent-border: #e74c3c;
+            --status-success-bg: #1e4620;
+            --status-success-border: #2a642d;
+            --status-success-text: #a6d9a8;
+            --status-error-bg: #5f2120;
+            --status-error-border: #8c2f2f;
+            --status-error-text: #f5c6cb;
+            --status-warning-bg: #4d442c;
+            --status-warning-border: #7e7041;
+            --status-warning-text: #fff3cd;
+            --toggle-icon-color: #f1c40f; 
+        }
+        /* --- Fim das Variáveis --- */
+
+        body {
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            background-color: var(--color-bg); 
+            color: var(--color-text-secondary);
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        #theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--color-card-bg);
+            border: none;
+            cursor: pointer;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: grid;
+            place-items: center;
+            box-shadow: 0 4px 10px var(--color-shadow);
+            z-index: 1000;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+        #theme-toggle svg {
+            width: 24px;
+            height: 24px;
+            color: var(--toggle-icon-color);
+            transition: transform 0.3s ease;
+        }
+        .icon-moon,
+        body.dark-mode .icon-sun {
+            display: none;
+        }
+        .icon-sun,
+        body.dark-mode .icon-moon {
+            display: block;
+        }
+
+        .container {
+            background: var(--color-card-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px var(--color-shadow);
+            padding: 2.5rem 3.5rem;
+            text-align: center;
+            width: 100%;
+            max-width: 550px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.8rem;
+            transition: background-color 0.3s ease;
+        }
+        .logo {
+            margin-bottom: 1rem;
+        }
+        .logo img {
+            max-width: 250px;
+            height: auto;
+        }
+
+        /* Lógica para trocar logos */
+        .logo-dark {
+            display: none;
+        }
+        .logo-light {
+            display: block;
+        }
+
+        body.dark-mode .logo-light {
+            display: none;
+        }
+        body.dark-mode .logo-dark {
+            display: block;
+        }
+
+        h1 {
+            color: var(--color-text-primary);
+            font-size: 1.8rem;
+            margin: 0;
+        }
+        #upload-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            width: 100%;
+        }
+        #arquivo-label {
+            border: 2px dashed var(--color-accent-border);
+            background-color: var(--color-accent-bg-light);
+            padding: 2.5rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            font-size: 1.1rem;
+            color: var(--color-accent-dark);
+            font-weight: 500;
+        }
+        #arquivo-label.dragover {
+            background-color: var(--color-accent-bg-light);
+            border-color: var(--color-accent-dark);
+            filter: brightness(0.95);
+        }
+        #arquivo-input {
+            display: none;
+        }
+        #submit-btn {
+            background-color: var(--color-accent);
+            color: white;
+            border: none;
+            padding: 0.9rem 1.5rem;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3);
+        }
+        #submit-btn:hover {
+            background-color: var(--color-accent-dark);
+            box-shadow: 0 6px 15px rgba(231, 76, 60, 0.4);
+        }
+        #submit-btn:disabled {
+            background-color: var(--color-text-secondary);
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        #status {
+            margin-top: 0.5rem;
+            font-weight: 500;
+            text-align: left;
+            line-height: 1.6;
+            width: 100%;
+            padding: 0.9rem 1.2rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        .status-success { 
+            color: var(--status-success-text);
+            background-color: var(--status-success-bg);
+            border: 1px solid var(--status-success-border);
+        }
+        .status-error { 
+            color: var(--status-error-text);
+            background-color: var(--status-error-bg);
+            border: 1px solid var(--status-error-border);
+        }
+        .status-warning {
+            color: var(--status-warning-text);
+            background-color: var(--status-warning-bg);
+            border: 1px solid var(--status-warning-border);
+        }
+        
+        /* Ajustes de responsividade (sem mudanças) */
+        @media (max-width: 600px) {
+            #theme-toggle {
+                top: 10px;
+                right: 10px;
+            }
+            .container {
+                padding: 1.5rem 2rem;
+                gap: 1.5rem;
+            }
+            .logo img {
+                max-width: 200px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            #arquivo-label {
+                padding: 1.8rem;
+                font-size: 1rem;
+            }
+            #submit-btn {
+                padding: 0.8rem 1.2rem;
+                font-size: 1rem;
+            }
+            #status {
+                font-size: 0.85rem;
+                padding: 0.8rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <button id="theme-toggle" title="Mudar tema">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-6.364-.386l1.591-1.591M3 12H.75m.386-6.364l1.591 1.591M12 12a2.25 2.25 0 00-2.25 2.25c0 1.31.67 2.41 1.67 3.03A2.25 2.25 0 0012 15a2.25 2.25 0 002.25-2.25A2.25 2.25 0 0012 12zM12 12a2.25 2.25 0 01-2.25-2.25c0-1.31.67-2.41 1.67-3.03A2.25 2.25 0 0112 9a2.25 2.25 0 012.25 2.25A2.25 2.25 0 0112 12z" />
+        </svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+        </svg>          
+    </button>
+
+    <script>
+        (function() {
+            const THEME_KEY = 'theme_preference';
+            const body = document.body;
+            function applyTheme(theme) {
+                if (theme === 'dark') {
+                    body.classList.add('dark-mode');
+                } else {
+                    body.classList.remove('dark-mode');
+                }
+            }
+            let savedTheme = localStorage.getItem(THEME_KEY);
+            if (savedTheme) {
+                applyTheme(savedTheme);
+            } else {
+                let systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                applyTheme(systemPrefersDark ? 'dark' : 'light');
+            }
+        })();
+    </script>
+
+
+    <div class="container">
+        <div class="logo">
+            <img src="assets/img/hemocentro_logo.png" alt="Logomarca Hemocentro" class="logo-light">
+            <img src="assets/img/hemocentro_logo2.png" alt="Logomarca Hemocentro" class="logo-dark">
+        </div>
+        <h1>Processar Mapa de Doações</h1>
+        <form id="upload-form" enctype="multipart/form-data">
+            <label for="arquivo-input" id="arquivo-label">
+                <span id="file-name">Clique ou arraste o arquivo Excel aqui</span>
+            </label>
+            <input type="file" id="arquivo-input" name="arquivo_excel" accept=".xls,.xlsx,.xlsm" required>
+            
+            <button type="submit" id="submit-btn" disabled>Processar e Baixar</button>
+        </form>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('arquivo-input');
+        const fileLabel = document.getElementById('arquivo-label');
+        const fileNameSpan = document.getElementById('file-name');
+        const submitBtn = document.getElementById('submit-btn');
+        const statusDiv = document.getElementById('status');
+        const labelDefaultText = fileNameSpan.textContent;
+
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const THEME_KEY = 'theme_preference';
+        
+        themeToggleBtn.addEventListener('click', () => {
+            const body = document.body;
+            let isDark = body.classList.toggle('dark-mode');
+            localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileNameSpan.textContent = fileInput.files[0].name;
+                submitBtn.disabled = false;
+                statusDiv.innerHTML = '';
+                statusDiv.className = '';
+            } else {
+                fileNameSpan.textContent = labelDefaultText;
+                submitBtn.disabled = true;
+            }
+        });
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            fileLabel.addEventListener(eventName, preventDefaults, false);
+        });
+        ['dragenter', 'dragover'].forEach(eventName => {
+            fileLabel.addEventListener(eventName, () => fileLabel.classList.add('dragover'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            fileLabel.addEventListener(eventName, () => fileLabel.classList.remove('dragover'), false);
+        });
+        fileLabel.addEventListener('drop', (e) => {
+            fileInput.files = e.dataTransfer.files;
+            fileInput.dispatchEvent(new Event('change')); 
+        }, false);
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); 
+            if (fileInput.files.length === 0) return;
+
+            statusDiv.innerHTML = 'Processando...';
+            statusDiv.className = '';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Aguarde...';
+
+            const formData = new FormData();
+            formData.append('arquivo_excel', fileInput.files[0]);
+
+            try {
+                const response = await fetch('processar.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Erro ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const warningMessage = response.headers.get('X-Warning-Message');
+
+                if (warningMessage) {
+                    const decodedMessage = decodeURIComponent(warningMessage);
+                    statusDiv.innerHTML = `<strong>Download iniciado.</strong><br>${decodedMessage}`;
+                    statusDiv.className = 'status-warning';
+                } else {
+                    statusDiv.textContent = 'Arquivo processado e baixado com sucesso!';
+                    statusDiv.className = 'status-success';
+                }
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'importacao.txt'; 
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+            } catch (error) {
+                console.error('Erro no processamento:', error);
+                statusDiv.innerHTML = `<strong>Falha:</strong> ${error.message}`;
+                statusDiv.className = 'status-error';
+            } finally {
+                submitBtn.disabled = true; 
+                submitBtn.textContent = 'Processar e Baixar';
+                fileInput.value = ''; 
+                fileNameSpan.textContent = labelDefaultText;
+            }
+        });
+    </script>
+</body>
+</html>
