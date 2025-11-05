@@ -2,6 +2,13 @@
 // 1. Incluir o autoloader do Composer
 require 'vendor/autoload.php';
 
+// Aumenta o limite de memória por segurança
+// (Se 512MB for o seu limite, vamos tentar 1GB)
+ini_set('memory_limit', '1G'); 
+
+// Define o fuso horário para garantir a data correta
+date_default_timezone_set('America/Fortaleza');
+
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -10,7 +17,18 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 const COLUNA_FINAL_INDEX = 12; // L é a 12ª
 const COLUNA_DOADOR_INDEX = 3;  // Doador é a 4ª (índice 3)
 const COLUNA_DTNASC_INDEX = 4; // DT. NASC. é a 5ª (índice 4)
-const COLUNA_TUBO_NOME = 'DOAÇAO TUBO NAT'; // DOAÇAO TUBO NAT
+const COLUNA_TUBO_NOME = 'DOAÇAO TUBO NAT';
+
+// Mapa de Cidades pelo código
+const MAPA_CIDADES = [
+    '04' => 'cajazeiras',
+    '07' => 'catole',
+    '05' => 'guarabira',
+    '12' => 'itaporanga',
+    '03' => 'patos',
+    '09' => 'pianco',
+    '06' => 'sousa'
+];
 
 // Lista de termos para filtrar
 $termos_invalidos = [
@@ -24,6 +42,7 @@ $termos_invalidos = [
 // Arrays de dados
 $dados_validos = [];
 $cabecalhos_array = [];
+$nome_cidade = null; 
 
 // Contadores para os avisos
 $linhas_removidas_count = 0;
@@ -31,11 +50,10 @@ $termos_encontrados = [];
 
 // Arrays para TODOS os erros de validação
 $date_validation_errors = [];
-$doacao_validation_errors = []; // Para Req 1 e 2
-$codigos_vistos = []; // Para Req 2 (duplicidade)
-
-$tubo_validation_errors = []; // (Req 3)
-$tubos_vistos = []; // (Req 3)
+$doacao_validation_errors = [];
+$codigos_vistos = [];
+$tubo_validation_errors = [];
+$tubos_vistos = [];
 
 
 // 2. Verificar se um arquivo foi enviado
@@ -45,17 +63,32 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
 
     try {
         // 3. Carregar o arquivo Excel
-        $spreadsheet = IOFactory::load($inputFileName);
+        // (Otimização de Memória)
+        
+        // Identifica o tipo de arquivo (Xlsx, Xls, etc.)
+        $fileType = IOFactory::identify($inputFileName);
+        // Cria o leitor apropriado
+        $reader = IOFactory::createReader($fileType);
+        
+        // Diz ao leitor para focar APENAS nos dados e ignorar estilos
+        $reader->setReadDataOnly(true); 
+        
+        // Carrega o arquivo usando o leitor otimizado
+        $spreadsheet = $reader->load($inputFileName);
+
         $sheet = $spreadsheet->getSheetByName('MAP MACR');
 
         if (!$sheet) {
+            // Descarrega a planilha da memória antes de sair
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
             throw new Exception("Erro: A planilha 'MAP MACR' não foi encontrada.");
         }
 
         // 4. Encontrar a linha do cabeçalho
         $headerRow = null; 
         $startRow = null;  
-        $coluna_tubo_index = -1; // **NOVO**
+        $coluna_tubo_index = -1;
         $highestRow = $sheet->getHighestDataRow();
 
         for ($row = 1; $row <= 20 && $row <= $highestRow; $row++) {
@@ -68,6 +101,7 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
         }
 
         if ($startRow === null) {
+            $spreadsheet->disconnectWorksheets(); unset($spreadsheet);
             throw new Exception("Não foi possível encontrar a linha de cabeçalho 'DOACAO HEMOVIDA'.");
         }
 
@@ -76,14 +110,13 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
             $valor_cabecalho = trim((string) $sheet->getCell([$col, $headerRow])->getValue());
             $cabecalhos_array[] = $valor_cabecalho;
             
-            // Encontra o índice da coluna do TUBO
             if (strtoupper($valor_cabecalho) === COLUNA_TUBO_NOME) {
                 $coluna_tubo_index = $col - 1; // -1 porque array é 0-indexed
             }
         }
         
-        // Verifica se encontrou a coluna do Tubo
         if ($coluna_tubo_index === -1) {
+            $spreadsheet->disconnectWorksheets(); unset($spreadsheet);
             throw new Exception("Erro: A coluna '" . COLUNA_TUBO_NOME . "' não foi encontrada no cabeçalho.");
         }
 
@@ -123,18 +156,16 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
             $doacao_code_raw = trim((string) $linha_temporaria[0]);
             $doacao_code = $doacao_code_raw;
 
-            // Pula linha se o código da doação estiver vazio
             if (empty($doacao_code)) {
                 continue; 
             }
 
-            // Limpa o ".0" que o Excel às vezes adiciona a números
             if (str_ends_with($doacao_code, ".0")) {
                 $doacao_code = substr($doacao_code, 0, -2);
             }
 
             $erro_formato = false;
-            if (!ctype_digit($doacao_code)) { // Verifica se é composto *apenas* de números
+            if (!ctype_digit($doacao_code)) {
                 $erro_formato = "não é composto apenas por números";
             } else if (strlen($doacao_code) != 11) {
                 $erro_formato = "não possui 11 dígitos (encontrado: " . strlen($doacao_code) . ")";
@@ -144,19 +175,30 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
             
             if ($erro_formato) {
                 $doacao_validation_errors[] = "Linha $row (Excel): Código '{$doacao_code_raw}' é inválido ($erro_formato).";
-                continue; // Pula esta linha
+                continue; 
             }
             
-            // (Req 2): Validação de Duplicidade
             if (isset($codigos_vistos[$doacao_code])) {
                 $linha_anterior = $codigos_vistos[$doacao_code];
                 $doacao_validation_errors[] = "Linha $row (Excel): Código '$doacao_code' está duplicado (visto na linha $linha_anterior).";
-                continue; // Pula esta linha
+                continue; 
             }
-            $codigos_vistos[$doacao_code] = $row; // Armazena a linha atual
+            $codigos_vistos[$doacao_code] = $row;
 
-            // === INÍCIO DA NOVA VALIDAÇÃO (DOAÇAO TUBO NAT) ===
-            
+
+            // Define o nome da cidade na PRIMEIRA linha válida
+            if ($nome_cidade === null) {
+                $codigo_cidade = substr($doacao_code, 1, 2); // Pega 2º e 3º dígito
+                
+                if (isset(MAPA_CIDADES[$codigo_cidade])) {
+                    $nome_cidade = MAPA_CIDADES[$codigo_cidade];
+                } else {
+                    $spreadsheet->disconnectWorksheets(); unset($spreadsheet);
+                    throw new Exception("Linha $row (Excel): Código de cidade '{$codigo_cidade}' (extraído da doação '{$doacao_code}') não é reconhecido.");
+                }
+            }
+
+
             // (Req 3): Validação do CÓDIGO TUBO NAT
             $tubo_code_raw = trim((string) $linha_temporaria[$coluna_tubo_index]);
             $tubo_code = $tubo_code_raw;
@@ -170,19 +212,16 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
 
             if ($erro_tubo) {
                 $tubo_validation_errors[] = "Linha $row (Excel): Código Tubo '{$tubo_code_raw}' é inválido ($erro_tubo).";
-                continue; // Pula esta linha
+                continue;
             }
 
-            // (Req 3): Validação de Duplicidade do Tubo
             if (isset($tubos_vistos[$tubo_code])) {
                 $linha_anterior = $tubos_vistos[$tubo_code];
                 $tubo_validation_errors[] = "Linha $row (Excel): Código Tubo '$tubo_code' está duplicado (visto na linha $linha_anterior).";
-                continue; // Pula esta linha
+                continue;
             }
-            $tubos_vistos[$tubo_code] = $row; // Armazena a linha atual
+            $tubos_vistos[$tubo_code] = $row;
             
-            // === FIM DA NOVA VALIDAÇÃO ===
-
 
             // REGRA DO HOSPITAL: Sobrescreve a coluna I (índice 8)
             $codigo_hospital_novo = substr($doacao_code, 1, 2); 
@@ -206,17 +245,20 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
             if ($linha_com_erro_de_data) {
                 $date_validation_errors[] = "Linha $row (Doação: $doacao_code) tem data inválida: '$excel_date_serial'";
             } else {
-                // Somente adiciona aos dados válidos se passou em TUDO
                 $dados_validos[] = $linha_temporaria;
             }
         } // Fim do loop das linhas
+        
+        // Libera a memória do Excel o mais rápido possível
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+        unset($reader);
 
-        // 7. **MUDANÇA: VERIFICAR ERROS CRÍTICOS (Doação, Tubo e Data)**
-        // Combina todos os erros críticos encontrados
+
+        // 7. VERIFICAR ERROS CRÍTICOS
         $all_critical_errors = array_merge($doacao_validation_errors, $tubo_validation_errors, $date_validation_errors);
 
         if (count($all_critical_errors) > 0) {
-            // Pega os 10 primeiros erros para mostrar na mensagem
             $erros_para_mostrar = array_slice($all_critical_errors, 0, 10);
             $mensagem_erro = "Processamento interrompido. " . count($all_critical_errors) . " erro(s) crítico(s) encontrado(s):";
             $mensagem_erro .= " " . implode('; ', $erros_para_mostrar);
@@ -234,10 +276,10 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
         $delimiter = ';';
         $enclosure = '"';
 
-        // Escrever cabeçalho (sem aspas, com ;)
+        // Escrever cabeçalho
         fwrite($handle, implode($delimiter, $cabecalhos_array) . "\r\n"); 
 
-        // Escrever dados manualmente
+        // Escrever dados
         foreach ($dados_validos as $linha) {
             $linha_para_escrever = [];
             foreach ($linha as $col_index => $valor) {
@@ -261,30 +303,43 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
         $csv_content = stream_get_contents($handle);
         fclose($handle);
 
-        // Envia o aviso de linhas "NULAS" removidas (se houver)
+        $exposed_headers = ['Content-Disposition']; 
+
         if ($linhas_removidas_count > 0) {
             $mensagem_aviso = "Processamento concluído. ";
             $mensagem_aviso .= "$linhas_removidas_count linha(s) foram removidas por conterem os termos: " . implode(', ', $termos_encontrados) . ".";
             
             header("X-Warning-Message: " . rawurlencode($mensagem_aviso));
-            header("Access-Control-Expose-Headers: X-Warning-Message");
+            $exposed_headers[] = 'X-Warning-Message'; 
         }
+        
+        header("Access-Control-Expose-Headers: " . implode(', ', $exposed_headers));
+
+        $data_atual = date('d.m.Y');
+        $nome_arquivo = "{$nome_cidade} {$data_atual}.txt";
 
         header('Content-Type: text/plain'); 
-        header('Content-Disposition: attachment; filename="importacao.txt"');
+        header('Content-Disposition: attachment; filename="' . $nome_arquivo . '"');
         header('Content-Length: ' . strlen($csv_content));
         
         echo $csv_content;
         exit;
 
     } catch (Exception $e) {
-        // Pega erros (incluindo os novos erros de data e doação)
+        // Garante que a memória seja liberada mesmo em caso de erro
+        if (isset($spreadsheet)) {
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+        }
+        if (isset($reader)) {
+            unset($reader);
+        }
+        
         http_response_code(500);
         echo 'Erro ao processar o arquivo: ' . $e->getMessage();
     }
 
 } else {
-    // Tratar erro de upload
     http_response_code(400);
     echo 'Nenhum arquivo enviado ou erro no upload.';
 }

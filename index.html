@@ -217,7 +217,7 @@
             border: 1px solid var(--status-warning-border);
         }
         
-        /* Ajustes de responsividade (sem mudanças) */
+        /* Ajustes de responsividade */
         @media (max-width: 600px) {
             #theme-toggle {
                 top: 10px;
@@ -372,6 +372,18 @@
 
                 const blob = await response.blob();
                 const warningMessage = response.headers.get('X-Warning-Message');
+                
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let downloadFilename = 'importacao.txt'; // Nome padrão
+
+                if (contentDisposition) {
+                    // Tenta extrair o nome do arquivo do header
+                    // Ex: attachment; filename="guarabira 05.11.2025.txt"
+                    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (filenameMatch && filenameMatch[1]) {
+                        downloadFilename = filenameMatch[1];
+                    }
+                }
 
                 if (warningMessage) {
                     const decodedMessage = decodeURIComponent(warningMessage);
@@ -386,7 +398,10 @@
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = 'importacao.txt'; 
+                
+                //Usa o nome do arquivo dinâmico
+                a.download = downloadFilename; 
+                
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
