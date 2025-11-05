@@ -10,7 +10,7 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 const COLUNA_FINAL_INDEX = 12; // L é a 12ª
 const COLUNA_DOADOR_INDEX = 3;  // Doador é a 4ª (índice 3)
 const COLUNA_DTNASC_INDEX = 4; // DT. NASC. é a 5ª (índice 4)
-const COLUNA_TUBO_NOME = 'DOAÇAO TUBO NAT'; // **NOVO**
+const COLUNA_TUBO_NOME = 'DOAÇAO TUBO NAT'; // DOAÇAO TUBO NAT
 
 // Lista de termos para filtrar
 $termos_invalidos = [
@@ -29,13 +29,13 @@ $cabecalhos_array = [];
 $linhas_removidas_count = 0;
 $termos_encontrados = [];
 
-// **MUDANÇA: Arrays para TODOS os erros de validação**
+// Arrays para TODOS os erros de validação
 $date_validation_errors = [];
 $doacao_validation_errors = []; // Para Req 1 e 2
 $codigos_vistos = []; // Para Req 2 (duplicidade)
 
-$tubo_validation_errors = []; // **NOVO (Req 3)**
-$tubos_vistos = []; // **NOVO (Req 3)**
+$tubo_validation_errors = []; // (Req 3)
+$tubos_vistos = []; // (Req 3)
 
 
 // 2. Verificar se um arquivo foi enviado
@@ -73,17 +73,16 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
 
         // 5. Pegar os cabeçalhos
         for ($col = 1; $col <= COLUNA_FINAL_INDEX; $col++) {
-            // **CORREÇÃO APLICADA AQUI**
             $valor_cabecalho = trim((string) $sheet->getCell([$col, $headerRow])->getValue());
             $cabecalhos_array[] = $valor_cabecalho;
             
-            // **NOVO: Encontra o índice da coluna do TUBO**
+            // Encontra o índice da coluna do TUBO
             if (strtoupper($valor_cabecalho) === COLUNA_TUBO_NOME) {
                 $coluna_tubo_index = $col - 1; // -1 porque array é 0-indexed
             }
         }
         
-        // **NOVO: Verifica se encontrou a coluna do Tubo**
+        // Verifica se encontrou a coluna do Tubo
         if ($coluna_tubo_index === -1) {
             throw new Exception("Erro: A coluna '" . COLUNA_TUBO_NOME . "' não foi encontrada no cabeçalho.");
         }
@@ -158,7 +157,7 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
 
             // === INÍCIO DA NOVA VALIDAÇÃO (DOAÇAO TUBO NAT) ===
             
-            // **NOVO (Req 3): Validação do CÓDIGO TUBO NAT**
+            // (Req 3): Validação do CÓDIGO TUBO NAT
             $tubo_code_raw = trim((string) $linha_temporaria[$coluna_tubo_index]);
             $tubo_code = $tubo_code_raw;
             $erro_tubo = false;
@@ -174,7 +173,7 @@ if (isset($_FILES['arquivo_excel']) && $_FILES['arquivo_excel']['error'] == UPLO
                 continue; // Pula esta linha
             }
 
-            // **NOVO (Req 3): Validação de Duplicidade do Tubo**
+            // (Req 3): Validação de Duplicidade do Tubo
             if (isset($tubos_vistos[$tubo_code])) {
                 $linha_anterior = $tubos_vistos[$tubo_code];
                 $tubo_validation_errors[] = "Linha $row (Excel): Código Tubo '$tubo_code' está duplicado (visto na linha $linha_anterior).";
